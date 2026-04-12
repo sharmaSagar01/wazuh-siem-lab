@@ -20,6 +20,7 @@
 Monitoring an IT environment is just as critical as building it. This project extends the [AD & Windows Server Labs](https://github.com/your-username/ad-windows-server-labs) environment by deploying a full SIEM stack — ingesting Windows Security Event logs from both Domain Controllers, writing custom detection rules for Active Directory threats, and documenting real incident detection cases.
 
 **What this project demonstrates:**
+
 - Deploying and configuring a production-grade SIEM from scratch
 - Forwarding and parsing Windows Security Event logs in real time
 - Writing custom alert rules for AD-specific threats
@@ -30,15 +31,15 @@ Monitoring an IT environment is just as critical as building it. This project ex
 
 ## 🖥️ Lab Environment
 
-| Component | Details |
-|-----------|---------|
-| **SIEM Manager** | Wazuh (Manager + Indexer + Dashboard) on Ubuntu 25 |
-| **Ubuntu Host IP** | `192.168.1.xx` |
-| **Primary DC** | `VM-DEV-WINSERV-01` — `192.168.1.10` — Wazuh Agent |
-| **Secondary DC** | `VM-DEV-WINSERV-02` — `192.168.1.12` — Wazuh Agent |
-| **Domain** | `InfoTech.com` |
-| **Virtualisation** | VMware Workstation Pro |
-| **Network** | Bridged — all machines on `192.168.1.0/24` |
+| Component          | Details                                            |
+| ------------------ | -------------------------------------------------- |
+| **SIEM Manager**   | Wazuh (Manager + Indexer + Dashboard) on Ubuntu 25 |
+| **Ubuntu Host IP** | `192.168.1.xx`                                     |
+| **Primary DC**     | `VM-DEV-WINSERV-01` — `192.168.1.10` — Wazuh Agent |
+| **Secondary DC**   | `VM-DEV-WINSERV-02` — `192.168.1.12` — Wazuh Agent |
+| **Domain**         | `InfoTech.com`                                     |
+| **Virtualisation** | VMware Workstation Pro                             |
+| **Network**        | Bridged — all machines on `192.168.1.0/24`         |
 
 ---
 
@@ -109,33 +110,25 @@ wazuh-siem-lab/
 
 ## 🎯 Security Events Being Monitored
 
-| Event ID | Description | Detection Goal |
-|----------|-------------|---------------|
-| `4624` | Successful logon | Baseline + RDP detection (Logon Type 10) |
-| `4625` | Failed logon | Brute-force attack detection |
-| `4740` | Account locked out | Lockout alert + automated response |
-| `4767` | Account unlocked | Admin action audit trail |
-| `4720` | New user account created | Unauthorised account creation |
-| `4728` | User added to security group | Privilege escalation detection |
-| `4672` | Admin privileges assigned | Sensitive privilege monitoring |
-| `5136` | AD object modified | GPO and directory tampering |
+| Event ID | Description                  | Detection Goal                           |
+| -------- | ---------------------------- | ---------------------------------------- |
+| `4624`   | Successful logon             | Baseline + RDP detection (Logon Type 10) |
+| `4625`   | Failed logon                 | Brute-force attack detection             |
+| `4740`   | Account locked out           | Lockout alert + automated response       |
+| `4767`   | Account unlocked             | Admin action audit trail                 |
+| `4720`   | New user account created     | Unauthorised account creation            |
+| `4728`   | User added to security group | Privilege escalation detection           |
+| `4672`   | Admin privileges assigned    | Sensitive privilege monitoring           |
+| `5136`   | AD object modified           | GPO and directory tampering              |
 
 ---
 
 ## 🧩 Build Progress
 
-| # | Phase | Status |
-|---|-------|--------|
-| 1 | Install Wazuh Manager on Ubuntu | ✅ Complete |
-| 2 | Access Wazuh Dashboard in browser | ⏳ Pending |
-| 3 | Install Wazuh Agent on VM-WINSERV-01 | ⏳ Pending |
-| 4 | Install Wazuh Agent on VM-WINSERV-02 | ⏳ Pending |
-| 5 | Configure Windows Security Event forwarding | ⏳ Pending |
-| 6 | Verify events appearing in dashboard | ⏳ Pending |
-| 7 | Write custom AD alert rules | ⏳ Pending |
-| 8 | Test rules — trigger real events from lab | ⏳ Pending |
-| 9 | Document 3 detection cases | ⏳ Pending |
-| 10 | Write runbook + push to GitHub | ⏳ Pending |
+| #   | Phase                                       | Status      |
+| --- | ------------------------------------------- | ----------- |
+| 1   | Install Wazuh Manager on Ubuntu             | ✅ Complete |
+
 
 ---
 
@@ -152,6 +145,7 @@ Wazuh is a three-component stack — all three are installed together on the Ubu
 <td width="33%" valign="top">
 
 **🧠 Wazuh Manager**
+
 - The brain of the SIEM
 - Receives events from all agents
 - Applies detection rules
@@ -162,6 +156,7 @@ Wazuh is a three-component stack — all three are installed together on the Ubu
 <td width="33%" valign="top">
 
 **🗄️ Wazuh Indexer**
+
 - Based on OpenSearch
 - Stores and indexes all events and alerts
 - Powers the search and query engine
@@ -171,6 +166,7 @@ Wazuh is a three-component stack — all three are installed together on the Ubu
 <td width="33%" valign="top">
 
 **📊 Wazuh Dashboard**
+
 - Web-based UI (HTTPS)
 - Real-time event visualisation
 - Alert management
@@ -207,14 +203,14 @@ ping -c 2 192.168.1.12
 
 ### System Resources Confirmed
 
-| Check | Required | Result |
-|-------|----------|--------|
-| RAM | 4 GB minimum | ✅ |
-| Disk | 20 GB free | ✅ |
-| CPU | 2 cores minimum | ✅ |
-| Ubuntu version | 22.04+ | ✅ Ubuntu 25 |
-| Ping VM-WINSERV-01 | Reachable | ✅ |
-| Ping VM-WINSERV-02 | Reachable | ✅ |
+| Check              | Required        | Result       |
+| ------------------ | --------------- | ------------ |
+| RAM                | 4 GB minimum    | ✅           |
+| Disk               | 20 GB free      | ✅           |
+| CPU                | 2 cores minimum | ✅           |
+| Ubuntu version     | 22.04+          | ✅ Ubuntu 25 |
+| Ping VM-WINSERV-01 | Reachable       | ✅           |
+| Ping VM-WINSERV-02 | Reachable       | ✅           |
 
 ---
 
@@ -239,13 +235,13 @@ Set the node IPs to your Ubuntu host IP:
 nodes:
   indexer:
     - name: node-1
-      ip: "192.168.1.19"
+      ip: "192.168.1.xx" (Input your host ip address)
   server:
     - name: wazuh-1
-      ip: "192.168.1.19"
+      ip: "192.168.1.xx" (Input your host ip address)
   dashboard:
     - name: dashboard
-      ip: "192.168.1.19"
+      ip: "192.168.1.xx" (Input your host ip address)
 ```
 
 **Step 3 — Generate configuration files**
@@ -306,6 +302,7 @@ sudo ss -tlnp | grep -E "1514|1515|443|9200"
 ```
 
 **Expected output:**
+
 ```
 ● wazuh-manager.service    Active: active (running)
 ● wazuh-indexer.service    Active: active (running)
@@ -319,14 +316,15 @@ sudo ss -tlnp | grep -E "1514|1515|443|9200"
 Open a browser on your Ubuntu desktop and go to:
 
 ```
-https://192.168.1.19
+https://192.168.1.xx
 ```
 
 > Accept the SSL certificate warning — this is expected with a self-signed certificate on a local lab.
 
 Login with:
+
 - **Username:** `admin`
-- **Password:** *(saved from Step 8 above)*
+- **Password:** _(saved from Step 8 above)_
 
 You should see the Wazuh Dashboard home screen with **0 agents connected** — agents are added in Phases 3 and 4.
 
@@ -335,12 +333,9 @@ You should see the Wazuh Dashboard home screen with **0 agents connected** — a
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="dashboards/screenshots/phase1-services-running.png" width="45%" title="Terminal — all three Wazuh services active and running" />
-  <img src="dashboards/screenshots/phase1-dashboard-home.png" width="45%" title="Wazuh Dashboard — first login, 0 agents connected" />
+  <img src="dashboards/Screenshots/phase1-image-1.png" width="45%" />
 </p>
 
 ---
 
-<div align="center">
-<sub>🛡️ Built for learning • ⭐ Star if you find this useful • More phases coming soon</sub>
-</div>
+
