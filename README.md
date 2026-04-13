@@ -125,11 +125,11 @@ wazuh-siem-lab/
 
 ## 🧩 Build Progress
 
-| #   | Phase                                       | Status      |
-| --- | ------------------------------------------- | ----------- |
-| 1   | Install Wazuh Manager on Ubuntu             | ✅ Complete |
-| 2   | Access Wazuh Dashboard in browser           | ✅ Complete |
-
+| #   | Phase                                | Status      |
+| --- | ------------------------------------ | ----------- |
+| 1   | Install Wazuh Manager on Ubuntu      | ✅ Complete |
+| 2   | Access Wazuh Dashboard in browser    | ✅ Complete |
+| 3   | Install Wazuh Agent on VM-WINSERV-01 | ✅ Complete |
 
 ---
 
@@ -338,48 +338,49 @@ You should see the Wazuh Dashboard home screen with **0 agents connected** — a
 </p>
 
 ---
+
 # ✅ Phase 2 — Access the Wazuh Dashboard
- 
+
 ## 📋 What This Phase Covers
- 
+
 With all three Wazuh services running on the Ubuntu host, Phase 2 is about
 accessing the web dashboard for the first time, exploring the interface,
 and confirming the manager is healthy before connecting any agents.
- 
+
 The Wazuh Dashboard is a full **Security Operations Centre (SOC) interface** —
 it's where all alerts, agent status, event timelines, and detection rules are managed.
 Understanding the layout before agents are connected makes the rest of the project
 much easier to follow.
- 
+
 ---
- 
+
 ## 🌐 Accessing the Dashboard
- 
+
 Open a browser on **any machine on the `192.168.1.x` network** — Ubuntu desktop,
 Windows Server, or even the Windows 11 client — and navigate to:
- 
+
 ```
 https://192.168.1.xx
 ```
- 
+
 > **SSL certificate warning is expected.** Wazuh uses a self-signed certificate
 > in a lab environment. Click **Advanced → Accept the Risk and Continue**
 > (Firefox) or **Advanced → Proceed** (Chrome). This is normal for local lab setups.
- 
+
 **Login credentials:**
- 
-| Field | Value |
-|-------|-------|
-| Username | `admin` |
+
+| Field    | Value                                                                   |
+| -------- | ----------------------------------------------------------------------- |
+| Username | `admin`                                                                 |
 | Password | Retrieved from `wazuh-install-files/wazuh-passwords.txt` during Phase 1 |
- 
+
 ---
- 
+
 ## 🗺️ Dashboard Layout — First Login
- 
+
 After logging in you will land on the Wazuh home screen. Here is what each
 section means before any agents are connected:
- 
+
 <table>
 <tr>
 <td width="50%" valign="top">
@@ -495,4 +496,216 @@ sudo systemctl enable wazuh-dashboard
 </p>
  
 ---
-
+# ✅ Phase 3 — Install Wazuh Agent on VM-WINSERV-01
+ 
+## 📋 What This Phase Covers
+ 
+A Wazuh **agent** is a lightweight service installed on each monitored machine.
+It continuously collects security events, log entries, and system activity —
+then forwards them encrypted to the Wazuh Manager on Ubuntu.
+ 
+Once the agent is connected, every login attempt, account lockout, group change,
+and RDP session on `VM-WINSERV-01` becomes visible in the dashboard in real time.
+ 
+---
+ 
+## 🔍 How Agent Registration Works
+ 
+```
+VM-WINSERV-01                          Ubuntu (Wazuh Manager)
+──────────────                         ──────────────────────
+Agent installed
+      │
+      │── Registration request ──────► Port 1515 (wazuh-authd)
+      │◄─ Unique agent key ────────────
+      │
+      │══ Encrypted event stream ─────► Port 1514 (wazuh-remoted)
+      │                                         │
+      │                                         ▼
+      │                               Wazuh Indexer stores events
+      │                                         │
+      │                                         ▼
+      │                               Dashboard displays alerts
+```
+ 
+---
+ 
+## 🚀 Installation Steps
+ 
+All steps in this phase are run on **VM-WINSERV-01** as Domain Admin,
+except the firewall steps which are run on **Ubuntu**.
+ 
+---
+ 
+### Part A — Open Required Ports on Ubuntu Firewall
+ 
+Before installing the agent, make sure the Ubuntu host allows inbound
+connections on the ports the agent needs:
+ 
+```bash
+# Run on Ubuntu
+sudo ufw allow 1514/tcp    # Agent event forwarding
+sudo ufw allow 1515/tcp    # Agent registration
+sudo ufw enable
+sudo ufw status
+```
+ 
+**Expected output:**
+```
+To                Action    From
+──                ──────    ────
+1514/tcp          ALLOW     Anywhere
+1515/tcp          ALLOW     Anywhere
+443/tcp           ALLOW     Anywhere
+```
+ 
+---
+ 
+### Part B — Download and Install the Agent on VM-WINSERV-01
+ 
+**Step 1 — Open PowerShell as Administrator on VM-WINSERV-01**
+ 
+**Step 2 — Download the Wazuh Windows Agent installer**
+ 
+```powershell
+# Download the agent MSI installer
+Invoke-WebRequest -Uri "https://packages.wazuh.com/4.x/windows/wazuh-agent-4.7.0-1.msi" `
+    -OutFile "C:\wazuh-agent.msi"
+```
+ 
+**Step 3 — Install the agent and point it to your Wazuh Manager**
+ 
+```powershell
+# Install silently — replace the IP with your Ubuntu host IP
+msiexec.exe /i "C:\wazuh-agent.msi" /q `
+    WAZUH_MANAGER="192.168.1.xx" `
+    WAZUH_AGENT_NAME="VM-WINSERV-01" `
+    WAZUH_REGISTRATION_SERVER="192.168.1.xx"
+```
+ 
+> **What each parameter does:**
+> - `WAZUH_MANAGER` — IP of the Wazuh Manager to forward events to
+> - `WAZUH_AGENT_NAME` — How this agent appears in the dashboard
+> - `WAZUH_REGISTRATION_SERVER` — Where to register and get the agent key
+ 
+**Step 4 — Start the Wazuh agent service**
+ 
+```powershell
+# Start the agent service
+NET START WazuhSvc
+ 
+# Confirm it is running
+Get-Service -Name WazuhSvc
+```
+ 
+**Expected output:**
+```
+Status   Name        DisplayName
+──────   ────        ───────────
+Running  WazuhSvc    Wazuh
+```
+ 
+**Step 5 — Verify the agent registered successfully**
+ 
+```powershell
+# Check the agent log for successful connection
+Get-Content "C:\Program Files (x86)\ossec-agent\ossec.log" -Tail 20
+```
+ 
+Look for these lines confirming registration and connection:
+```
+INFO: Successfully registered
+INFO: Connected to the server (192.168.1.xx:1514)
+```
+ 
+---
+ 
+### Part C — Verify Agent Appears on the Wazuh Dashboard
+ 
+**On the Ubuntu browser**, navigate to:
+ 
+```
+https://192.168.1.xx → Agents
+```
+ 
+You should see **VM-WINSERV-01** listed with status **Active** (green).
+ 
+---
+ 
+### Part D — Verify from Ubuntu Terminal
+ 
+```bash
+# List all registered agents and their status
+sudo /var/ossec/bin/agent_control -l
+```
+ 
+**Expected output:**
+```
+ID: 001  Name: VM-WINSERV-01  IP: 192.168.1.10  Status: Active
+```
+ 
+---
+ 
+## 🔧 Configure the Agent — Windows Event Log Collection
+ 
+By default the agent collects standard Windows logs. Configure it to also
+collect the **Security Event Log** which contains all AD-related events:
+ 
+**On VM-WINSERV-01**, edit the agent config file:
+ 
+```powershell
+notepad "C:\Program Files (x86)\ossec-agent\ossec.conf"
+```
+ 
+Find the `<localfile>` section and confirm or add the following:
+ 
+```xml
+<!-- Security Event Log — AD logins, lockouts, group changes -->
+<localfile>
+  <location>Security</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+ 
+<!-- System Event Log -->
+<localfile>
+  <location>System</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+ 
+<!-- Application Event Log -->
+<localfile>
+  <location>Application</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+```
+ 
+**Restart the agent to apply the config:**
+ 
+```powershell
+NET STOP WazuhSvc
+NET START WazuhSvc
+```
+ 
+---
+ 
+## ✅ Outcome
+ 
+- Wazuh agent installed on `VM-WINSERV-01` (`192.168.1.10`) ✅
+- Agent registered with Wazuh Manager at `192.168.1.xx` ✅
+- `WazuhSvc` service running and confirmed connected ✅
+- Agent visible in Wazuh Dashboard as **Active** ✅
+- Windows Security, System, and Application event logs configured for collection ✅
+- Security events from `VM-WINSERV-01` now flowing into the dashboard ✅
+- Ready for **Phase 4 — Agent installation on VM-WINSERV-02** ✅
+ 
+---
+ 
+## 📸 Screenshots
+ 
+<p align="center">
+  <img src="dashboards/Screenshots/phase3-image-1.png" width="45%" />
+   <img src="dashboards/Screenshots/phase3-image-2.png" width="45%" />
+  />
+</p>
+ 
+---

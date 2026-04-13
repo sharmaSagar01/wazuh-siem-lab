@@ -1,0 +1,26 @@
+
+**On VM-WINSERV-01**, edit the agent config file:
+ 
+```powershell
+notepad "C:\Program Files (x86)\ossec-agent\ossec.conf"
+```
+ 
+Find the `<localfile>` section and confirm or add the following:
+
+<!-- Security Event Log — AD logins, lockouts, group changes -->
+<localfile>
+  <location>Security</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+ 
+<!-- System Event Log -->
+<localfile>
+  <location>System</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+ 
+<!-- Application Event Log -->
+<localfile>
+  <location>Application</location>
+  <log_format>eventchannel</log_format>
+</localfile>
