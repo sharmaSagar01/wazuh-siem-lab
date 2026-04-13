@@ -128,6 +128,7 @@ wazuh-siem-lab/
 | #   | Phase                                       | Status      |
 | --- | ------------------------------------------- | ----------- |
 | 1   | Install Wazuh Manager on Ubuntu             | ✅ Complete |
+| 2   | Access Wazuh Dashboard in browser           | ✅ Complete |
 
 
 ---
@@ -337,5 +338,161 @@ You should see the Wazuh Dashboard home screen with **0 agents connected** — a
 </p>
 
 ---
-
+# ✅ Phase 2 — Access the Wazuh Dashboard
+ 
+## 📋 What This Phase Covers
+ 
+With all three Wazuh services running on the Ubuntu host, Phase 2 is about
+accessing the web dashboard for the first time, exploring the interface,
+and confirming the manager is healthy before connecting any agents.
+ 
+The Wazuh Dashboard is a full **Security Operations Centre (SOC) interface** —
+it's where all alerts, agent status, event timelines, and detection rules are managed.
+Understanding the layout before agents are connected makes the rest of the project
+much easier to follow.
+ 
+---
+ 
+## 🌐 Accessing the Dashboard
+ 
+Open a browser on **any machine on the `192.168.1.x` network** — Ubuntu desktop,
+Windows Server, or even the Windows 11 client — and navigate to:
+ 
+```
+https://192.168.1.xx
+```
+ 
+> **SSL certificate warning is expected.** Wazuh uses a self-signed certificate
+> in a lab environment. Click **Advanced → Accept the Risk and Continue**
+> (Firefox) or **Advanced → Proceed** (Chrome). This is normal for local lab setups.
+ 
+**Login credentials:**
+ 
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | Retrieved from `wazuh-install-files/wazuh-passwords.txt` during Phase 1 |
+ 
+---
+ 
+## 🗺️ Dashboard Layout — First Login
+ 
+After logging in you will land on the Wazuh home screen. Here is what each
+section means before any agents are connected:
+ 
+<table>
+<tr>
+<td width="50%" valign="top">
+ 
+**Left Sidebar — Main Navigation**
+| Section | Purpose |
+|---------|---------|
+| `Overview` | Summary of all security events across all agents |
+| `Agents` | List of connected agents and their status |
+| `Threat Intelligence` | MITRE ATT&CK mapping and threat hunting |
+| `Security Events` | Raw event log browser |
+| `Integrity Monitoring` | File integrity change detection |
+| `Vulnerabilities` | CVE scan results per agent |
+ 
+</td>
+<td width="50%" valign="top">
+ 
+**What to Expect at First Login**
+| Item | State |
+|------|-------|
+| Agents connected | 0 — added in Phases 3 & 4 |
+| Security events | 0 — no data yet |
+| Manager status | Green — healthy |
+| Indexer status | Green — healthy |
+| Dashboard version | Wazuh 4.7.x |
+ 
+</td>
+</tr>
+</table>
+ 
+---
+ 
+## 🔍 Verify Manager Health from the Dashboard
+ 
+Once logged in, navigate to:
+ 
+**☰ Menu → Server Management → Status**
+ 
+Confirm all components show green:
+ 
+```
+Component              Status
+──────────────────────────────
+wazuh-modulesd         ● Running
+wazuh-logcollector     ● Running
+wazuh-syscheckd        ● Running
+wazuh-analysisd        ● Running
+wazuh-remoted          ● Running
+wazuh-execd            ● Running
+wazuh-monitord         ● Running
+wazuh-db               ● Running
+```
+ 
+> If any component shows **Stopped** — run `sudo systemctl restart wazuh-manager`
+> on the Ubuntu terminal and refresh the page.
+ 
+---
+ 
+## 🔍 Verify Manager Health from Terminal
+ 
+Cross-check the dashboard status from the Ubuntu terminal:
+ 
+```bash
+# Confirm all three services are still running after reboot
+sudo systemctl status wazuh-manager
+sudo systemctl status wazuh-indexer
+sudo systemctl status wazuh-dashboard
+ 
+# Confirm ports are open and listening
+sudo ss -tlnp | grep -E "1514|1515|443|9200"
+```
+ 
+**Expected port output:**
+ 
+| Port | Service | Purpose |
+|------|---------|---------|
+| `1514` | wazuh-remoted | Receives events from agents |
+| `1515` | wazuh-authd | Agent registration / authentication |
+| `443` | wazuh-dashboard | Web UI — HTTPS |
+| `9200` | wazuh-indexer | OpenSearch API |
+ 
+---
+ 
+## 🔒 Enable Auto-Start on Boot
+ 
+Make sure all three Wazuh services start automatically if Ubuntu is rebooted:
+ 
+```bash
+sudo systemctl enable wazuh-manager
+sudo systemctl enable wazuh-indexer
+sudo systemctl enable wazuh-dashboard
+```
+ 
+---
+ 
+## ✅ Outcome
+ 
+- Wazuh Dashboard accessible at `https://192.168.1.xx` ✅
+- SSL certificate warning accepted — dashboard loaded successfully ✅
+- Logged in with `admin` credentials ✅
+- All Wazuh Manager components confirmed running in Server Status page ✅
+- Ports `1514`, `1515`, `443`, `9200` confirmed listening on Ubuntu ✅
+- All three services set to auto-start on boot ✅
+- Dashboard shows **0 agents** — ready for Phase 3 (Agent installation) ✅
+ 
+---
+ 
+## 📸 Screenshots
+ 
+<p align="center">
+  <img src="dashboards/Screenshots/phase2-image-1.png" width="45%" />
+  <img src="dashboards/Screenshots/phase2-image-2.png" width="45%" />
+</p>
+ 
+---
 
