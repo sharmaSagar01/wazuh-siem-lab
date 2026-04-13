@@ -130,6 +130,8 @@ wazuh-siem-lab/
 | 1   | Install Wazuh Manager on Ubuntu      | ✅ Complete |
 | 2   | Access Wazuh Dashboard in browser    | ✅ Complete |
 | 3   | Install Wazuh Agent on VM-WINSERV-01 | ✅ Complete |
+| 4   | Install Wazuh Agent on VM-WINSERV-02 | ✅ Complete |
+
 
 ---
 
@@ -708,4 +710,209 @@ NET START WazuhSvc
   />
 </p>
  
+---
+# ✅ Phase 4 — Install Wazuh Agent on VM-WINSERV-02
+ 
+## 📋 What This Phase Covers
+ 
+Phase 4 mirrors Phase 3 exactly — installing and registering the Wazuh agent
+on the **secondary Domain Controller** (`VM-DEV-WINSERV-02`).
+ 
+With agents on both DCs, the Wazuh Manager receives security events from the
+entire domain — not just one server. This matters because:
+ 
+- **AD replication events** happen on both DCs simultaneously
+- **RDP sessions** could be established to either server
+- **Authentication failures** against either DC are caught
+- If one DC goes offline, the other continues feeding the SIEM
+ 
+> All steps in this phase are identical to Phase 3 — run on
+> **VM-DEV-WINSERV-02** (`192.168.1.12`) as Domain Admin.
+ 
+---
+ 
+## 🚀 Installation Steps
+ 
+### Part A — Download and Install the Agent on VM-WINSERV-02
+ 
+**Step 1 — Open PowerShell as Administrator on VM-WINSERV-02**
+ 
+**Step 2 — Download the Wazuh agent installer**
+ 
+```powershell
+Invoke-WebRequest -Uri "https://packages.wazuh.com/4.x/windows/wazuh-agent-4.7.0-1.msi" `
+    -OutFile "C:\wazuh-agent.msi"
+```
+ 
+**Step 3 — Install and register the agent**
+ 
+```powershell
+msiexec.exe /i "C:\wazuh-agent.msi" /q `
+    WAZUH_MANAGER="192.168.1.xx" `
+    WAZUH_AGENT_NAME="VM-WINSERV-02" `
+    WAZUH_REGISTRATION_SERVER="192.168.1.xx"
+```
+ 
+> Note the agent name is `VM-WINSERV-02` — this is how it appears in the
+> dashboard separately from Server 01.
+ 
+**Step 4 — Start the agent service**
+ 
+```powershell
+NET START WazuhSvc
+ 
+# Confirm running
+Get-Service -Name WazuhSvc
+```
+ 
+**Step 5 — Verify connection in the log**
+ 
+```powershell
+Get-Content "C:\Program Files (x86)\ossec-agent\ossec.log" -Tail 20
+```
+ 
+Look for:
+```
+INFO: Connected to the server (192.168.1.xx:1514)
+```
+ 
+---
+ 
+### Part B — Configure Windows Event Log Collection
+ 
+```powershell
+notepad "C:\Program Files (x86)\ossec-agent\ossec.conf"
+```
+ 
+Confirm the same `<localfile>` entries are present as on Server 01:
+ 
+```xml
+<localfile>
+  <location>Security</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+ 
+<localfile>
+  <location>System</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+ 
+<localfile>
+  <location>Application</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+```
+ 
+Restart the agent to apply:
+ 
+```powershell
+NET STOP WazuhSvc
+NET START WazuhSvc
+```
+ 
+---
+ 
+### Part C — Verify Both Agents from Ubuntu Terminal
+ 
+```bash
+# List all registered agents — should now show both servers
+sudo /var/ossec/bin/agent_control -l
+```
+ 
+**Expected output — both agents Active:**
+ 
+```
+ID: 001  Name: VM-WINSERV-01  IP: 192.168.1.10  Status: Active
+ID: 002  Name: VM-WINSERV-02  IP: 192.168.1.12  Status: Active
+```
+ 
+---
+ 
+### Part D — Verify Both Agents on the Dashboard
+ 
+Navigate to `https://192.168.1.xx → Agents`
+ 
+You should now see **two agents** both showing green **Active** status:
+ 
+| Agent ID | Name | IP | Status |
+|----------|------|----|--------|
+| 001 | VM-WINSERV-01 | 192.168.1.10 | 🟢 Active |
+| 002 | VM-WINSERV-02 | 192.168.1.12 | 🟢 Active |
+ 
+---
+ 
+### Part E — Trigger a Test Event to Confirm Data Flow
+ 
+With both agents connected, generate a real Windows Security Event to confirm
+events are flowing into the dashboard end to end:
+ 
+**On VM-WINSERV-02**, deliberately fail a login 3 times:
+ 
+```powershell
+# This generates Event ID 4625 (failed logon) — visible in Wazuh within seconds
+runas /user:InfoTech\FakeUser cmd
+# Enter wrong password 3 times — each attempt generates a 4625 event
+```
+ 
+**Then check the dashboard:**
+ 
+```
+https://192.168.1.xx → ThreatHunting → Search: "4625"
+```
+ 
+If you see events appearing from either `VM-WINSERV-01` or `VM-WINSERV-02`
+— both agents are working end to end. ✅
+ 
+---
+ 
+## 🔍 Both Agents Connected — What the Dashboard Now Shows
+ 
+With two active agents the Wazuh dashboard provides:
+ 
+<table>
+<tr>
+<td width="50%" valign="top">
+ 
+**Security Events View**
+- Live feed of events from both DCs
+- Filter by agent — view Server 01 or Server 02 separately
+- Search by Event ID (`4625`, `4740`, `4728` etc.)
+- Timeline view showing event frequency over time
+ 
+</td>
+<td width="50%" valign="top">
+ 
+**Agent Overview**
+- Last keep-alive timestamp per agent
+- Event count per agent
+- Alert count per agent
+- OS and version details
+- Agent version and last config sync
+ 
+</td>
+</tr>
+</table>
+ 
+---
+ 
+## ✅ Outcome
+ 
+- Wazuh agent installed on `VM-DEV-WINSERV-02` (`192.168.1.12`) ✅
+- Agent registered with Wazuh Manager at `192.168.1.xx` ✅
+- `WazuhSvc` service running and confirmed connected on Server 02 ✅
+- Both agents visible in Wazuh Dashboard as **Active** ✅
+- Windows Security, System, and Application logs configured on Server 02 ✅
+- Test Event ID `4625` confirmed appearing in dashboard from both agents ✅
+- **Full domain coverage** — both DCs monitored in real time ✅
+- Ready for **Phase 5 — Windows Security Event Log Forwarding Configuration** ✅
+ 
+---
+ 
+## 📸 Screenshots
+ 
+<p align="center">
+  <img src="dashboards/Screenshots/phase4-image-1.png" width="45%" />
+   <img src="dashboards/Screenshots/phase4-image-2.png" width="45%" />
+  />
+</p>
 ---
