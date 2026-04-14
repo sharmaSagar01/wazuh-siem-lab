@@ -125,13 +125,14 @@ wazuh-siem-lab/
 
 ## 🧩 Build Progress
 
-| #   | Phase                                | Status      |
-| --- | ------------------------------------ | ----------- |
-| 1   | Install Wazuh Manager on Ubuntu      | ✅ Complete |
-| 2   | Access Wazuh Dashboard in browser    | ✅ Complete |
-| 3   | Install Wazuh Agent on VM-WINSERV-01 | ✅ Complete |
-| 4   | Install Wazuh Agent on VM-WINSERV-02 | ✅ Complete |
-
+| #   | Phase                                       | Status      |
+| --- | ------------------------------------------- | ----------- |
+| 1   | Install Wazuh Manager on Ubuntu             | ✅ Complete |
+| 2   | Access Wazuh Dashboard in browser           | ✅ Complete |
+| 3   | Install Wazuh Agent on VM-WINSERV-01        | ✅ Complete |
+| 4   | Install Wazuh Agent on VM-WINSERV-02        | ✅ Complete |
+| 5   | Configure Windows Security Event forwarding | ✅ Complete |
+| 6   | Verify events appearing in dashboard        | ✅ Complete |
 
 ---
 
@@ -914,5 +915,246 @@ With two active agents the Wazuh dashboard provides:
   <img src="dashboards/Screenshots/phase4-image-1.png" width="45%" />
    <img src="dashboards/Screenshots/phase4-image-2.png" width="45%" />
   />
+</p>
+---
+
+# ✅ Phase 5 — Windows Security Event Log Forwarding & Verification
+
+## 📋 What This Phase Covers
+
+Installing the agent is only half the job. The agent needs to be explicitly
+told **which Windows Event Logs to collect** and Windows itself needs to be
+configured to **actually write the right events** through audit policy.
+
+This phase covers both — and documents the real troubleshooting that was
+required to get events flowing correctly.
+
+---
+
+## 🔍 How Windows Security Logging Works
+
+```
+User action (e.g. failed login)
+        │
+        ▼
+Windows checks: Is audit policy enabled for this event type?
+        │
+        ├── NO  → Event is silently dropped — never written anywhere
+        │
+        └── YES → Event written to Windows Security Event Log
+                        │
+                        ▼
+                Wazuh Agent reads the Security log
+                        │
+                        ▼
+                Event forwarded to Wazuh Manager (port 1514)
+                        │
+                        ▼
+                Wazuh Indexer stores and indexes the event
+                        │
+                        ▼
+                Dashboard displays the alert
+```
+
+> **Key insight:** If audit policy is off — nothing gets logged anywhere.
+> Wazuh has nothing to collect. This is the most commonly missed step
+> when setting up Windows SIEM monitoring.
+
+---
+
+## ⚙️ Part A — Configure Audit Policy on Both Servers
+
+Run on **both VM-WINSERV-01 and VM-WINSERV-02**:
+
+```powershell
+# Account logon events — failed logins, credential validation
+auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+auditpol /set /subcategory:"Account Lockout" /success:enable /failure:enable
+auditpol /set /subcategory:"Credential Validation" /success:enable /failure:enable
+
+# Account management — user creation, group changes, password resets
+auditpol /set /subcategory:"User Account Management" /success:enable /failure:enable
+auditpol /set /subcategory:"Security Group Management" /success:enable /failure:enable
+auditpol /set /subcategory:"Other Account Management Events" /success:enable /failure:enable
+
+# Apply immediately — no reboot needed
+gpupdate /force
+```
+
+### Verify All Policies Are Set Correctly
+
+```powershell
+auditpol /get /subcategory:"Logon"
+auditpol /get /subcategory:"Account Lockout"
+auditpol /get /subcategory:"Credential Validation"
+auditpol /get /subcategory:"User Account Management"
+auditpol /get /subcategory:"Security Group Management"
+```
+
+**All should show `Success and Failure`:**
+
+| Policy                    | Required Setting    |
+| ------------------------- | ------------------- |
+| Logon                     | Success and Failure |
+| Account Lockout           | Success and Failure |
+| Credential Validation     | Success and Failure |
+| User Account Management   | Success and Failure |
+| Security Group Management | Success and Failure |
+
+---
+
+## ⚙️ Part B — Confirm Agent Config Collects Security Log
+
+On **both servers**, open the agent config:
+
+```powershell
+notepad "C:\Program Files (x86)\ossec-agent\ossec.conf"
+```
+
+Confirm these exact `<localfile>` entries exist — `eventchannel` is critical:
+
+```xml
+<!-- Security Event Log — all AD authentication and management events -->
+<localfile>
+  <location>Security</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+
+<!-- System Event Log -->
+<localfile>
+  <location>System</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+
+<!-- Application Event Log -->
+<localfile>
+  <location>Application</location>
+  <log_format>eventchannel</log_format>
+</localfile>
+```
+
+> ⚠️ **Must be `eventchannel` not `eventlog`** — `eventlog` is the legacy
+> format and does not correctly parse Windows Security events for Wazuh.
+
+Restart the agent after any config change:
+
+```powershell
+NET STOP WazuhSvc
+NET START WazuhSvc
+```
+
+---
+
+## 🔍 Part C — Troubleshooting That Was Required
+
+### Issue 1 — Audit Policy Missing Failure Logging
+
+Running `auditpol /get /subcategory:"Account Lockout"` revealed:
+
+```
+Account Lockout    Success          ← Missing "Failure"
+Credential Validation    Success    ← Missing "Failure"
+```
+
+Without **Failure** auditing, Windows does not write Event ID `4625`
+(failed logon) or `4740` (account lockout) to the Security log at all —
+so Wazuh had nothing to collect.
+
+**Fix:** Enabled Failure auditing on all relevant subcategories as shown in Part A.
+
+### Issue 2 — Ubuntu Firewall Blocking Agent Ports
+
+After enabling UFW on Ubuntu to open ports `1514` and `1515`, the firewall
+started blocking all other traffic including ping and agent connections.
+
+**Fix:**
+
+```bash
+sudo ufw allow 1514/tcp
+sudo ufw allow 1515/tcp
+sudo ufw allow in proto icmp
+sudo ufw reload
+```
+
+### Issue 3 — Administrator Account Locked During Testing
+
+During the failed login test to generate Event ID `4625`, the built-in
+Administrator account was accidentally locked out on both Domain Controllers.
+
+**Fix:** Used the **Utilman.exe replacement technique** via Windows Recovery
+Mode to reset the local Administrator password and regain access.
+
+**Prevention — create a dedicated test account for lockout testing:**
+
+```powershell
+# Never use Administrator for lockout testing
+# Create a throwaway test account instead
+New-ADUser -Name "Wazuh Test" `
+    -SamAccountName "wazuhtest" `
+    -AccountPassword (ConvertTo-SecureString "Test@12345!" -AsPlainText -Force) `
+    -Enabled $true `
+    -ChangePasswordAtLogon $false
+```
+
+---
+
+## ✅ Part D — Verification — Events Flowing End to End
+
+### Step 1 — Confirm Events Exist Locally on Windows
+
+```powershell
+# Generate a test event first — fail login 3 times with test account
+# Then check Security log locally
+Get-WinEvent -FilterHashtable @{
+    LogName = 'Security'
+    Id      = 4625
+} -MaxEvents 5 | Select TimeCreated, Id, Message
+```
+
+If this returns events — Windows is logging them correctly.
+
+### Step 2 — Confirm in Wazuh Dashboard
+
+Navigate to:
+
+```
+☰ Menu → Threat Hunting → VM-WINSERV-01
+```
+
+In the search bar:
+
+```
+data.win.system.eventID: 4625
+```
+
+Set time range to **Last 15 minutes** → click **Refresh**
+
+### Step 3 — Broaden Search if Needed
+
+Remove all filters and search all agents:
+
+```
+data.win.system.eventID: 4625 OR data.win.system.eventID: 4740
+```
+
+---
+
+## ✅ Outcome
+
+- Audit policy confirmed **Success and Failure** on all required subcategories ✅
+- Agent config confirmed using `eventchannel` format for Security log ✅
+- Dedicated test account `wazuhtest` created — Administrator no longer used for testing ✅
+- Event ID `4625` (failed logon) confirmed writing to local Security log ✅
+- Events flowing from both agents into Wazuh Dashboard ✅
+- `1,661` low severity and `204` medium severity events confirmed in dashboard ✅
+- Ready for **Phase 6 — Custom AD Alert Rules** ✅
+
+---
+
+## 📸 Screenshots
+
+ <p align="center">
+  <img src="dashboards/Screenshots/phase5-6-image-1.png" width="45%" />
+   <img src="dashboards/Screenshots/phase5-6-image-2.png" width="45%" />
 </p>
 ---
