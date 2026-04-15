@@ -1,20 +1,19 @@
 <!-- ============================================================
      Custom Windows Platform Detection Rules
      Domain: InfoTech.com
-     Author: AD Automation Toolkit Project
      ============================================================ -->
- 
+
 <group name="windows,authentication,">
- 
+
   <!-- ── Failed Login Attempt ─────────────────────────────── -->
   <rule id="100101" level="7">
-    <if_sid>60103</if_sid>
+    <if_sid>60122</if_sid>
     <field name="win.system.eventID">^4625$</field>
     <description>Windows Failed Login — $(win.eventdata.targetUserName) failed on $(win.system.computer)</description>
     <mitre><id>T1110</id></mitre>
     <group>authentication_failed,</group>
   </rule>
- 
+
   <!-- ── Brute Force — 5 Failed Logins in 2 Minutes ───────── -->
   <rule id="100102" level="12" frequency="5" timeframe="120">
     <if_matched_sid>100101</if_matched_sid>
@@ -23,17 +22,17 @@
     <mitre><id>T1110.001</id></mitre>
     <group>brute_force,authentication_failed,high_risk,</group>
   </rule>
- 
-  <!-- ── Successful Login ──────────────────────────────────── -->
+
+  <!-- ── Network Logon ─────────────────────────────────────── -->
   <rule id="100103" level="3">
-    <if_sid>60103</if_sid>
+    <if_sid>60106</if_sid>
     <field name="win.system.eventID">^4624$</field>
     <field name="win.eventdata.logonType">^3$</field>
     <description>Windows Network Logon — $(win.eventdata.targetUserName) logged on via network</description>
     <mitre><id>T1078</id></mitre>
     <group>authentication_success,</group>
   </rule>
- 
+
   <!-- ── RDP Session Detected ─────────────────────────────── -->
   <rule id="100104" level="8">
     <if_sid>60103</if_sid>
@@ -43,23 +42,5 @@
     <mitre><id>T1021.001</id></mitre>
     <group>remote_access,rdp,</group>
   </rule>
- 
-  <!-- ── Admin Privileges Assigned ────────────────────────── -->
-  <rule id="100105" level="14">
-    <if_sid>60103</if_sid>
-    <field name="win.system.eventID">^4672$</field>
-    <description>Privileged Logon — Admin rights assigned to $(win.eventdata.subjectUserName) on $(win.system.computer)</description>
-    <mitre><id>T1078.002</id></mitre>
-    <group>privilege_escalation,high_risk,</group>
-  </rule>
- 
-  <!-- ── User Account Deleted ─────────────────────────────── -->
-  <rule id="100106" level="10">
-    <if_sid>60103</if_sid>
-    <field name="win.system.eventID">^4726$</field>
-    <description>AD User Account Deleted — $(win.eventdata.targetUserName) deleted by $(win.eventdata.subjectUserName)</description>
-    <mitre><id>T1531</id></mitre>
-    <group>account_management,high_risk,</group>
-  </rule>
- 
+
 </group>
