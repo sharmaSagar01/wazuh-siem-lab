@@ -1508,4 +1508,11 @@ New-ADUser -Name "Rule Test User" -SamAccountName "ruletest" `
 - Ready for **Phase 7 — Detection Case Documentation** ✅
  
 ---
+## 📸 Screenshots
 
+ <p align="center">
+  <img src="dashboards/Screenshots/phase7-8-image-1.png" width="45%" />
+   <img src="dashboards/Screenshots/phase7-8-image-2.png" width="45%" />
+</p>
+
+---
