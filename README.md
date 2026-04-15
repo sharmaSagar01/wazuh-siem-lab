@@ -133,6 +133,8 @@ wazuh-siem-lab/
 | 4   | Install Wazuh Agent on VM-WINSERV-02        | ✅ Complete |
 | 5   | Configure Windows Security Event forwarding | ✅ Complete |
 | 6   | Verify events appearing in dashboard        | ✅ Complete |
+| 7   | Write custom AD alert rules                 | ✅ Complete |
+| 8   | Test rules — trigger real events from lab   | ✅ Complete |
 
 ---
 
@@ -1157,4 +1159,353 @@ data.win.system.eventID: 4625 OR data.win.system.eventID: 4740
   <img src="dashboards/Screenshots/phase5-6-image-1.png" width="45%" />
    <img src="dashboards/Screenshots/phase5-6-image-2.png" width="45%" />
 </p>
+
 ---
+---
+
+
+# ✅ Phase 6 — Custom AD Alert Rules
+ 
+## 📋 What This Phase Covers
+ 
+Wazuh ships with hundreds of built-in rules — but they are generic.
+Custom rules let you define **exactly what constitutes a threat in your
+specific environment** and control the severity level, alert description,
+and MITRE ATT&CK mapping for each detection.
+ 
+This phase creates two custom rule files targeting Active Directory threats:
+ 
+| File | Purpose |
+|------|---------|
+| `rules/custom-ad-rules.xml` | AD-specific detections — lockouts, group changes, new users, GPO edits |
+| `rules/custom-windows-rules.xml` | Windows platform detections — RDP sessions, privilege assignment, brute force |
+ 
+---
+ 
+## 🔍 How Wazuh Rules Work
+ 
+```xml
+<rule id="100001" level="10">
+    │              │       │
+    │              │       └── Severity 0-15 (15 = critical, 12 = high, 7 = medium)
+    │              └────────── Unique rule ID (custom rules start at 100000+)
+    └───────────────────────── XML element
+ 
+  <if_sid>60103</if_sid>          ← Triggers on top of this existing Wazuh rule
+  <field name="win.system.eventID">^4740$</field>  ← Match condition
+  <description>AD account locked out</description>  ← Alert title in dashboard
+  <mitre><id>T1110</id></mitre>   ← MITRE ATT&CK technique mapping
+</rule>
+```
+ 
+**Rule severity levels used in this project:**
+ 
+| Level | Severity | Used For |
+|-------|---------|---------|
+| `7` | Medium | Successful logins, user creation |
+| `10` | High | Account lockouts, group changes |
+| `12` | High+ | Multiple failed logins (brute force pattern) |
+| `14` | Critical | Privilege escalation, GPO modification |
+ 
+---
+ 
+## 📁 Part A — Create the Custom Rules Directory
+ 
+On **Ubuntu**:
+ 
+```bash
+# Wazuh custom rules live here
+sudo ls /var/ossec/etc/rules/
+ 
+# Create the custom rule files
+sudo nano /var/ossec/etc/rules/custom-ad-rules.xml
+sudo nano /var/ossec/etc/rules/custom-windows-rules.xml
+```
+ 
+---
+ 
+## 📄 Part B — `custom-ad-rules.xml`
+ 
+```xml
+<!-- ============================================================
+     Custom Active Directory Detection Rules
+     Domain: InfoTech.com
+     Author: AD Automation Toolkit Project
+     ============================================================ -->
+ 
+<group name="windows,active_directory,">
+ 
+  <!-- ── Account Lockout ──────────────────────────────────── -->
+  <rule id="100001" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4740$</field>
+    <description>AD Account Lockout — $(win.eventdata.targetUserName) locked out on $(win.eventdata.targetDomainName)</description>
+    <options>no_full_log</options>
+    <mitre><id>T1110</id></mitre>
+    <group>account_lockout,authentication_failed,</group>
+  </rule>
+ 
+  <!-- ── Account Unlocked by Admin ────────────────────────── -->
+  <rule id="100002" level="7">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4767$</field>
+    <description>AD Account Unlocked — $(win.eventdata.targetUserName) unlocked by admin</description>
+    <mitre><id>T1098</id></mitre>
+    <group>account_management,</group>
+  </rule>
+ 
+  <!-- ── New User Account Created ─────────────────────────── -->
+  <rule id="100003" level="8">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4720$</field>
+    <description>AD New User Created — $(win.eventdata.targetUserName) created by $(win.eventdata.subjectUserName)</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>account_management,</group>
+  </rule>
+ 
+  <!-- ── User Account Disabled ────────────────────────────── -->
+  <rule id="100004" level="7">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4725$</field>
+    <description>AD User Account Disabled — $(win.eventdata.targetUserName)</description>
+    <mitre><id>T1531</id></mitre>
+    <group>account_management,</group>
+  </rule>
+ 
+  <!-- ── User Added to Security Group ─────────────────────── -->
+  <rule id="100005" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4728$</field>
+    <description>AD User Added to Security Group — $(win.eventdata.memberName) added to $(win.eventdata.targetUserName)</description>
+    <mitre><id>T1098</id></mitre>
+    <group>account_management,privilege_escalation,</group>
+  </rule>
+ 
+  <!-- ── User Removed from Security Group ─────────────────── -->
+  <rule id="100006" level="8">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4729$</field>
+    <description>AD User Removed from Security Group — $(win.eventdata.memberName) removed from $(win.eventdata.targetUserName)</description>
+    <mitre><id>T1098</id></mitre>
+    <group>account_management,</group>
+  </rule>
+ 
+  <!-- ── GPO Modified ──────────────────────────────────────── -->
+  <rule id="100007" level="14">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^5136$</field>
+    <description>AD Group Policy Object Modified — potential policy tampering detected</description>
+    <mitre><id>T1484.001</id></mitre>
+    <group>policy_change,high_risk,</group>
+  </rule>
+ 
+  <!-- ── Password Reset by Admin ──────────────────────────── -->
+  <rule id="100008" level="9">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4723$</field>
+    <description>AD Password Reset Attempted — $(win.eventdata.targetUserName)</description>
+    <mitre><id>T1098</id></mitre>
+    <group>account_management,</group>
+  </rule>
+ 
+</group>
+```
+ 
+---
+ 
+## 📄 Part C — `custom-windows-rules.xml`
+ 
+```xml
+<!-- ============================================================
+     Custom Windows Platform Detection Rules
+     Domain: InfoTech.com
+     Author: AD Automation Toolkit Project
+     ============================================================ -->
+ 
+<group name="windows,authentication,">
+ 
+  <!-- ── Failed Login Attempt ─────────────────────────────── -->
+  <rule id="100101" level="7">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4625$</field>
+    <description>Windows Failed Login — $(win.eventdata.targetUserName) failed on $(win.system.computer)</description>
+    <mitre><id>T1110</id></mitre>
+    <group>authentication_failed,</group>
+  </rule>
+ 
+  <!-- ── Brute Force — 5 Failed Logins in 2 Minutes ───────── -->
+  <rule id="100102" level="12" frequency="5" timeframe="120">
+    <if_matched_sid>100101</if_matched_sid>
+    <same_field>win.eventdata.targetUserName</same_field>
+    <description>Brute Force Detected — 5+ failed logins for $(win.eventdata.targetUserName) in 2 minutes</description>
+    <mitre><id>T1110.001</id></mitre>
+    <group>brute_force,authentication_failed,high_risk,</group>
+  </rule>
+ 
+  <!-- ── Successful Login ──────────────────────────────────── -->
+  <rule id="100103" level="3">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4624$</field>
+    <field name="win.eventdata.logonType">^3$</field>
+    <description>Windows Network Logon — $(win.eventdata.targetUserName) logged on via network</description>
+    <mitre><id>T1078</id></mitre>
+    <group>authentication_success,</group>
+  </rule>
+ 
+  <!-- ── RDP Session Detected ─────────────────────────────── -->
+  <rule id="100104" level="8">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4624$</field>
+    <field name="win.eventdata.logonType">^10$</field>
+    <description>RDP Session Started — $(win.eventdata.targetUserName) connected via Remote Desktop from $(win.eventdata.ipAddress)</description>
+    <mitre><id>T1021.001</id></mitre>
+    <group>remote_access,rdp,</group>
+  </rule>
+ 
+  <!-- ── Admin Privileges Assigned ────────────────────────── -->
+  <rule id="100105" level="14">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4672$</field>
+    <description>Privileged Logon — Admin rights assigned to $(win.eventdata.subjectUserName) on $(win.system.computer)</description>
+    <mitre><id>T1078.002</id></mitre>
+    <group>privilege_escalation,high_risk,</group>
+  </rule>
+ 
+  <!-- ── User Account Deleted ─────────────────────────────── -->
+  <rule id="100106" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4726$</field>
+    <description>AD User Account Deleted — $(win.eventdata.targetUserName) deleted by $(win.eventdata.subjectUserName)</description>
+    <mitre><id>T1531</id></mitre>
+    <group>account_management,high_risk,</group>
+  </rule>
+ 
+</group>
+```
+ 
+---
+ 
+## ⚙️ Part D — Deploy the Rules on Ubuntu
+ 
+```bash
+# Copy rules to the correct Wazuh rules directory
+sudo cp /path/to/custom-ad-rules.xml /var/ossec/etc/rules/
+sudo cp /path/to/custom-windows-rules.xml /var/ossec/etc/rules/
+ 
+# Validate rules syntax before restarting
+sudo /var/ossec/bin/wazuh-analysisd -t
+ 
+# If validation passes — restart the manager to load new rules
+sudo systemctl restart wazuh-manager
+ 
+# Confirm manager restarted cleanly
+sudo systemctl status wazuh-manager
+```
+ 
+**Expected validation output:**
+```
+wazuh-analysisd: INFO: No errors found. Ready to start.
+```
+ 
+If you see any `ERROR` lines — check the XML syntax in the rule file.
+Common mistakes: unclosed tags, wrong attribute names, duplicate rule IDs.
+ 
+---
+ 
+## 🧪 Part E — Test Every Rule
+ 
+### Test 1 — Account Lockout (Rule 100001, Level 10)
+ 
+On the **Windows 11 client**, fail login 6 times with the test account:
+```
+Username: INFOTECH\wazuhtest
+Password: wrongpassword  ← repeat 6 times
+```
+ 
+**Expected in dashboard:** Alert `Rule 100001` — *"AD Account Lockout — wazuhtest locked out"*
+ 
+---
+ 
+### Test 2 — User Added to Security Group (Rule 100005, Level 10)
+ 
+On **VM-WINSERV-01**:
+ 
+```powershell
+Add-ADGroupMember -Identity "IT_Staff" -Members "wazuhtest"
+```
+ 
+**Expected in dashboard:** Alert `Rule 100005` — *"AD User Added to Security Group"*
+ 
+---
+ 
+### Test 3 — Brute Force Detection (Rule 100102, Level 12)
+ 
+Fail login **5 times within 2 minutes** on the Windows 11 client:
+```
+Username: INFOTECH\wazuhtest
+Password: wrongpassword  ← 5 times quickly
+```
+ 
+**Expected in dashboard:** Alert `Rule 100102` — *"Brute Force Detected — 5+ failed logins in 2 minutes"*
+ 
+---
+ 
+### Test 4 — RDP Session (Rule 100104, Level 8)
+ 
+From the Windows 11 client, open Remote Desktop and connect to the server:
+```
+mstsc → 192.168.1.10 → login as INFOTECH\sue
+```
+ 
+**Expected in dashboard:** Alert `Rule 100104` — *"RDP Session Started — sue connected via Remote Desktop"*
+ 
+---
+ 
+### Test 5 — New User Created (Rule 100003, Level 8)
+ 
+On **VM-WINSERV-01**:
+ 
+```powershell
+New-ADUser -Name "Rule Test User" -SamAccountName "ruletest" `
+    -AccountPassword (ConvertTo-SecureString "Test@12345!" -AsPlainText -Force) `
+    -Enabled $true
+```
+ 
+**Expected in dashboard:** Alert `Rule 100003` — *"AD New User Created — ruletest"*
+ 
+---
+ 
+## 📊 Rule Summary
+ 
+| Rule ID | Event ID | Level | Detection | MITRE |
+|---------|----------|-------|-----------|-------|
+| `100001` | `4740` | 10 — High | Account locked out | T1110 |
+| `100002` | `4767` | 7 — Medium | Account unlocked by admin | T1098 |
+| `100003` | `4720` | 8 — Medium | New user account created | T1136.001 |
+| `100004` | `4725` | 7 — Medium | User account disabled | T1531 |
+| `100005` | `4728` | 10 — High | User added to security group | T1098 |
+| `100006` | `4729` | 8 — Medium | User removed from security group | T1098 |
+| `100007` | `5136` | 14 — Critical | GPO modified | T1484.001 |
+| `100008` | `4723` | 9 — High | Password reset | T1098 |
+| `100101` | `4625` | 7 — Medium | Failed login attempt | T1110 |
+| `100102` | `4625` x5 | 12 — High | Brute force detected | T1110.001 |
+| `100103` | `4624` Type 3 | 3 — Low | Network logon | T1078 |
+| `100104` | `4624` Type 10 | 8 — Medium | RDP session started | T1021.001 |
+| `100105` | `4672` | 14 — Critical | Admin privileges assigned | T1078.002 |
+| `100106` | `4726` | 10 — High | User account deleted | T1531 |
+ 
+---
+ 
+## ✅ Outcome
+ 
+- `custom-ad-rules.xml` deployed — 8 AD-specific detection rules active ✅
+- `custom-windows-rules.xml` deployed — 6 Windows platform rules active ✅
+- Rule syntax validated with `wazuh-analysisd -t` — no errors ✅
+- Wazuh Manager restarted cleanly with new rules loaded ✅
+- All 5 test scenarios confirmed firing correct alerts in dashboard ✅
+- Brute force detection rule correctly correlating multiple events ✅
+- MITRE ATT&CK techniques mapped to every rule ✅
+- Ready for **Phase 7 — Detection Case Documentation** ✅
+ 
+---
+
