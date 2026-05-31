@@ -576,13 +576,16 @@ Real troubleshooting documented end to end
 
 <div align="center">
 
-![Complete](https://img.shields.io/badge/Project-Complete-brightgreen?style=flat-square)
+![Complete](https://img.shields.io/badge/Status-Complete-green?style=flat-square)
 
-**🛡️ Built for learning • ⭐ Star if you find this useful**
+**☁️ Built for learning • ⭐ Star if you find this useful**
 
 _Part of a series:_
-_[AD & Windows Server Labs](https://github.com/sharmaSagar01/Active-Directory-Lab.git) |_
-_[AD Automation Toolkit](https://github.com/sharmaSagar01/ad-automation-toolkit) |_
-_[Wazuh SIEM Lab](https://github.com/sharmaSagar01/wazuh-siem-lab)_
+[AD & Windows Server Labs](https://github.com/sharmaSagar01/Active-Directory-Lab) •
+[AD Automation Toolkit](https://github.com/sharmaSagar01/ad-automation-toolkit) •
+[Wazuh SIEM Lab](https://github.com/sharmaSagar01/wazuh-siem-lab) •
+[ITSM Helpdesk Lab](https://github.com/sharmaSagar01/itsm-helpdesk-lab) •
+[Azure Hybrid Identity Lab](https://github.com/sharmaSagar01/azure-hybrid-identity-lab) •
+[AWS Cloud Infrastructure Lab](https://github.com/sharmaSagar01/aws-cloud-infra-lab)
 
 </div>
